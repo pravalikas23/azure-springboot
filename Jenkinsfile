@@ -20,7 +20,7 @@ pipeline {
             }
         }
 
-        /*
+        
         stage('Maven Validate') 
         {
             steps {
@@ -54,7 +54,7 @@ pipeline {
                 echo "Trivy Scan Finished"
             }
         }
-        */
+        
     }
     
 }
