@@ -46,13 +46,31 @@ pipeline {
                 sh 'mvn install'
             }
         }
-        stage(' Trivy Scan')
+        stage('Trivy Scan')
         {
             steps {
                 echo "Trivy Scan Started"
                 sh 'trivy fs --format table --output trivy-report.txt --severity HIGH,CRITICAL .'
                 echo "Trivy Scan Finished"
             }
+        }
+        stage('Sonar Analysis')
+        {
+            environment{
+                SCANNER_HOME = tool 'Sonar-scanner'
+                 }
+        
+            steps {
+                withSonarQubeEnv('sonarserver') {
+                    sh '''${SCANNER_HOME}/bin/sonar-scanner \
+                     -Dsonar.organization=santhosharyan46 \
+                     -Dsonar.projectName=springbootapp \
+                     -Dsonar.projectKey=santhosharyan46_springbootapp \
+                     -Dsonar.java.binaries=.
+                      '''
+                }
+            }
+
         }
         
     }
