@@ -12,6 +12,7 @@ pipeline {
         TENANT_ID="bf014b4a-f9e8-44bb-9e5d-688eee4115e0"
         IMAGE_NAME="springbootapp"
         IMAGE_TAG="latest"
+        ACR_NAME="springbootdockerrg"
     }
 
     stages {
@@ -99,7 +100,20 @@ pipeline {
             }
 
         }
+        stage('Azure Login and ACR')
+        {
+            steps{
+                withCredentials([usernamePassword(credentialsId: 'azure-acr-spn', passwordVariable: 'AZURE_PASSWORD', usernameVariable: 'AZURE_USERNAME')]) {
+                   script {
+                       echo "Azure Login"
+                       sh '''
+                        az login --service-principal -u $AZURE_USERNAME -p $AZURE_PASSWORD --tenant $TENANT_ID'
+                        az acr login --name $ACR_NAME
+                   }
+                   
+                }
+            }
+        }
         
     }
 }  
-    
