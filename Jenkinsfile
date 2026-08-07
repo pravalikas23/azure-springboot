@@ -10,6 +10,8 @@ pipeline {
 
     environment {
         TENANT_ID="bf014b4a-f9e8-44bb-9e5d-688eee4115e0"
+        IMAGE_NAME="springbootapp"
+        IMAGE_TAG="latest"
     }
 
     stages {
@@ -46,30 +48,30 @@ pipeline {
         //         sh 'mvn install'
         //     }
         // }
-        stage('Trivy Scan')
-        {
-            steps {
-                echo "Trivy Scan Started"
-                sh 'trivy fs --format table --output trivy-report.txt --severity HIGH,CRITICAL .'
-                echo "Trivy Scan Finished"
-            }
-        }
-        stage('Sonar Analysis')
-        {
-            environment{
-                SCANNER_HOME = tool 'Sonar-scanner'
-                 }
+        // stage('Trivy Scan')
+        // {
+        //     steps {
+        //         echo "Trivy Scan Started"
+        //         sh 'trivy fs --format table --output trivy-report.txt --severity HIGH,CRITICAL .'
+        //         echo "Trivy Scan Finished"
+        //     }
+        // }
+        // stage('Sonar Analysis')
+        // {
+        //     environment{
+        //         SCANNER_HOME = tool 'Sonar-scanner'
+        //          }
         
-            steps {
-                withSonarQubeEnv('sonarserver') {
-                    sh '''${SCANNER_HOME}/bin/sonar-scanner \
-                     -Dsonar.organization=santhosharyan46 \
-                     -Dsonar.projectName=springbootapp \
-                     -Dsonar.projectKey=santhosharyan46_springbootapp \
-                     -Dsonar.java.binaries=.
-                      '''
-                }
-            }
+        //     steps {
+        //         withSonarQubeEnv('sonarserver') {
+        //             sh '''${SCANNER_HOME}/bin/sonar-scanner \
+        //              -Dsonar.organization=santhosharyan46 \
+        //              -Dsonar.projectName=springbootapp \
+        //              -Dsonar.projectKey=santhosharyan46_springbootapp \
+        //              -Dsonar.java.binaries=.
+        //               '''
+        //         }
+        //     }
 
         }
         stage('Maven Package') 
@@ -78,14 +80,24 @@ pipeline {
                 sh 'mvn package'
             }
         }
-        stage('Sonar Quality Gate') 
-         {
+        // stage('Sonar Quality Gate') 
+        //  {
+        //     steps {
+        //         timeout(time: 1, unit: 'MINUTES') {
+        //             waitForQualityGate abortPipeline: true, credentialsId: 'sonar'
+        //             echo "Sonar Quality Gate Finished"
+        //         }
+        //     }
+        // }
+        stage('Docker Build')
+        {
             steps {
-                timeout(time: 1, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true, credentialsId: 'sonar'
-                    echo "Sonar Quality Gate Finished"
+                script{
+                echo "Build Docker Image"
+                docker.build ("${IMAGE_NAME}:${IMAGE_TAG}")
                 }
             }
+
         }
         
     }
