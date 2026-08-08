@@ -15,6 +15,8 @@ pipeline {
         ACR_NAME="springbootdockerrg"
         ACR_LOGIN_SERVER="springbootdockerrg.azurecr.io"
         FULL_IMAGE_NAME="${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
+        RG = "aks-rg"
+        NAME = "demoaks"
     }
 
     stages {
@@ -129,6 +131,25 @@ pipeline {
                     docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${FULL_IMAGE_NAME}
                     docker push ${FULL_IMAGE_NAME}
                     '''
+                }
+            }
+        }
+        stage('Azure Login and AKS Deployment')
+        {
+            steps{
+                withCredentials([usernamePassword(credentialsId: 'azure-acr-spn', passwordVariable: 'AZURE_PASSWORD', usernameVariable: 'AZURE_USERNAME')]) {
+                   script {
+                       echo "Azure Login"
+                       sh '''
+                        
+                        az login --service-principal -u $AZURE_USERNAME -p $AZURE_PASSWORD --tenant $TENANT_ID
+                        az account set --subscription "bf014b4a-f9e8-44bb-9e5d-688eee4115e0"
+                        az aks get-credentials --resource-group $RG --name $NAME --overwrite-existing
+                        az acr login --name $ACR_NAME
+                        kubectl apply -f k8s/sprinboot-deployment.yaml
+                        '''
+                   }
+                   
                 }
             }
         }
