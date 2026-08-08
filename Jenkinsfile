@@ -10,7 +10,6 @@ pipeline {
 
     environment {
         TENANT_ID="ea72094a-e774-4c49-b077-bcedcb1f17e4"
-        SUBSCRIPTION_ID="bf014b4a-f9e8-44bb-9e5d-688eee4115e0"
         IMAGE_NAME="springbootapp"
         IMAGE_TAG="latest"
         ACR_NAME="springbootdockerrg"
@@ -110,7 +109,7 @@ pipeline {
                    script {
                        echo "Azure Login"
                        sh '''
-                        az account set --subscription $SUBSCRIPTION_ID
+                        az account set --subscription "bf014b4a-f9e8-44bb-9e5d-688eee4115e0"
                         az login --service-principal -u $AZURE_USERNAME -p $AZURE_PASSWORD --tenant $TENANT_ID
                         az acr login --name $ACR_NAME
                         '''
