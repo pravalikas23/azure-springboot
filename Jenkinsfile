@@ -10,9 +10,12 @@ pipeline {
 
     environment {
         TENANT_ID="ea72094a-e774-4c49-b077-bcedcb1f17e4"
+        SUBSCRIPTION_ID="bf014b4a-f9e8-44bb-9e5d-688eee4115e0"
         IMAGE_NAME="springbootapp"
         IMAGE_TAG="latest"
         ACR_NAME="springbootdockerrg"
+        ACR_LOGIN_SERVER="springbootdockerrg.azurecr.io"
+        FULL_IMAGE_NAME="${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
     }
 
     stages {
@@ -107,12 +110,24 @@ pipeline {
                    script {
                        echo "Azure Login"
                        sh '''
-                        az account set --subscription "bf014b4a-f9e8-44bb-9e5d-688eee4115e0"
+                        az account set --subscription $SUBSCRIPTION_ID
                         az login --service-principal -u $AZURE_USERNAME -p $AZURE_PASSWORD --tenant $TENANT_ID
                         az acr login --name $ACR_NAME
                         '''
                    }
                    
+                }
+            }
+        }
+        stage('Docker Push')
+        {
+            steps{
+                script {
+                    echo "Docker Image Push to ACR"
+                    sh '''
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${FULL_IMAGE_NAME}
+                    docker push ${FULL_IMAGE_NAME}
+                    '''
                 }
             }
         }
