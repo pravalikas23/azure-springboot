@@ -28,72 +28,72 @@ pipeline {
         }
 
         
-        // stage('Maven Validate') 
-        // {
-        //     steps {
-        //         sh 'mvn validate'
-        //     }
-        // }
+        stage('Maven Validate') 
+        {
+            steps {
+                sh 'mvn validate'
+            }
+        }
 
-        // stage('Maven Compile') 
-        // {
-        //     steps {
-        //         sh 'mvn compile'
-        //     }
-        // }
-        // stage('Maven Test') 
-        // {
-        //     steps {
-        //         sh 'mvn test'
-        //     }
-        // }
-        // stage('Maven Install') 
-        // {
-        //     steps {
-        //         sh 'mvn install'
-        //     }
-        // }
-        // stage('Trivy Scan')
-        // {
-        //     steps {
-        //         echo "Trivy Scan Started"
-        //         sh 'trivy fs --format table --output trivy-report.txt --severity HIGH,CRITICAL .'
-        //         echo "Trivy Scan Finished"
-        //     }
-        // }
-        // stage('Sonar Analysis')
-        // {
-        //     environment{
-        //         SCANNER_HOME = tool 'Sonar-scanner'
-        //          }
+        stage('Maven Compile') 
+        {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+        stage('Maven Test') 
+        {
+            steps {
+                sh 'mvn test'
+            }
+        }
+        stage('Maven Install') 
+        {
+            steps {
+                sh 'mvn install'
+            }
+        }
+        stage('Trivy Scan')
+        {
+            steps {
+                echo "Trivy Scan Started"
+                sh 'trivy fs --format table --output trivy-report.txt --severity HIGH,CRITICAL .'
+                echo "Trivy Scan Finished"
+            }
+        }
+        stage('Sonar Analysis')
+        {
+            environment{
+                SCANNER_HOME = tool 'Sonar-scanner'
+                 }
         
-        //     steps {
-        //         withSonarQubeEnv('sonarserver') {
-        //             sh '''${SCANNER_HOME}/bin/sonar-scanner \
-        //              -Dsonar.organization=santhosharyan46 \
-        //              -Dsonar.projectName=springbootapp \
-        //              -Dsonar.projectKey=santhosharyan46_springbootapp \
-        //              -Dsonar.java.binaries=.
-        //               '''
-        //         }
-        //     }
+            steps {
+                withSonarQubeEnv('sonarserver') {
+                    sh '''${SCANNER_HOME}/bin/sonar-scanner \
+                     -Dsonar.organization=santhosharyan46 \
+                     -Dsonar.projectName=springbootapp \
+                     -Dsonar.projectKey=santhosharyan46_springbootapp \
+                     -Dsonar.java.binaries=.
+                      '''
+                }
+            }
 
-        // }
+        }
         stage('Maven Package') 
          {
             steps {
                 sh 'mvn package'
             }
         }
-        // stage('Sonar Quality Gate') 
-        //  {
-        //     steps {
-        //         timeout(time: 1, unit: 'MINUTES') {
-        //             waitForQualityGate abortPipeline: true, credentialsId: 'sonar'
-        //             echo "Sonar Quality Gate Finished"
-        //         }
-        //     }
-        // }
+        stage('Sonar Quality Gate') 
+         {
+            steps {
+                timeout(time: 1, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true, credentialsId: 'sonar'
+                    echo "Sonar Quality Gate Finished"
+                }
+            }
+        }
         stage('Docker Build')
         {
             steps {

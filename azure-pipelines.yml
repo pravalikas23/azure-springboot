@@ -1,0 +1,303 @@
+trigger:
+- prod
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  imageName: 'springbootapp'
+  imageTag: 'latest'
+  acrName: 'YOUR-ACR-NAME'
+  acrLoginServer: 'YOUR-ACR-NAME.azurecr.io'
+  fullImageName: '$(acrLoginServer)/$(imageName):$(imageTag)'
+
+  azureServiceConnection: 'YOUR-AZURE-SERVICE-CONNECTION'
+  sonarServiceConnection: 'YOUR-SONAR-SERVICE-CONNECTION'
+
+  resourceGroup: 'YOUR-RESOURCE-GROUP'
+  aksName: 'YOUR-AKS-CLUSTER'
+
+steps:
+
+# ============================
+# CHECKOUT
+# ============================
+
+- checkout: self
+  displayName: 'Checkout from Git'
+
+
+# ============================
+# MAVEN VALIDATE
+# ============================
+
+- task: Maven@4
+  displayName: 'Maven Validate'
+  inputs:
+    mavenPomFile: 'pom.xml'
+    goals: 'validate'
+    publishJUnitResults: false
+
+
+# ============================
+# MAVEN COMPILE
+# ============================
+
+- task: Maven@4
+  displayName: 'Maven Compile'
+  inputs:
+    mavenPomFile: 'pom.xml'
+    goals: 'compile'
+    publishJUnitResults: false
+
+
+# ============================
+# MAVEN TEST
+# ============================
+
+- task: Maven@4
+  displayName: 'Maven Test'
+  inputs:
+    mavenPomFile: 'pom.xml'
+    goals: 'test'
+    publishJUnitResults: true
+    testResultsFiles: '**/surefire-reports/TEST-*.xml'
+
+
+# ============================
+# MAVEN PACKAGE
+# ============================
+
+- task: Maven@4
+  displayName: 'Maven Package'
+  inputs:
+    mavenPomFile: 'pom.xml'
+    goals: 'package'
+    publishJUnitResults: false
+
+
+# ============================
+# SONAR PREPARE
+# ============================
+
+- task: SonarQubePrepare@8
+  displayName: 'Prepare SonarQube Analysis'
+  inputs:
+    SonarQube: '$(sonarServiceConnection)'
+    scannerMode: 'cli'
+    configMode: 'manual'
+    cliProjectKey: 'springbootapp'
+    cliProjectName: 'springbootapp'
+    cliSources: '.'
+
+
+# ============================
+# SONAR ANALYSIS
+# ============================
+
+- task: SonarQubeAnalyze@8
+  displayName: 'SonarQube Analysis'
+
+
+# ============================
+# SONAR QUALITY GATE
+# ============================
+
+- task: SonarQubePublish@8
+  displayName: 'SonarQube Quality Gate'
+  inputs:
+    pollingTimeoutSec: '300'
+
+
+# ============================
+# DOCKER BUILD
+# ============================
+
+- task: Docker@2
+  displayName: 'Docker Build'
+  inputs:
+    command: 'build'
+    repository: '$(imageName)'
+    Dockerfile: '**/Dockerfile'
+    tags: |
+      $(imageTag)
+
+
+# ============================
+# TRIVY INSTALL
+# ============================
+
+- script: |
+    sudo apt-get update
+    sudo apt-get install -y wget
+    wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+      gpg --dearmor | \
+      sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+
+    echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] \
+      https://aquasecurity.github.io/trivy-repo/deb \
+      generic main" | \
+      sudo tee /etc/apt/sources.list.d/trivy.list
+
+    sudo apt-get update
+    sudo apt-get install -y trivy
+  displayName: 'Install Trivy'
+
+
+# ============================
+# TRIVY SCAN
+# ============================
+
+- script: |
+    echo "Trivy Scan Started"
+
+    trivy image \
+      --format table \
+      --output trivy-report.txt \
+      --severity HIGH,CRITICAL \
+      $(imageName):$(imageTag)
+
+    echo "Trivy Scan Finished"
+  displayName: 'Trivy Security Scan'
+
+
+# ============================
+# PUBLISH TRIVY REPORT
+# ============================
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Trivy Report'
+  inputs:
+    PathtoPublish: 'trivy-report.txt'
+    ArtifactName: 'TrivyReport'
+    publishLocation: 'Container'
+
+
+# ============================
+# LOGIN TO AZURE
+# ============================
+
+- task: AzureCLI@3
+  displayName: 'Azure Login'
+  inputs:
+    azureSubscription: '$(azureServiceConnection)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az account show
+
+
+# ============================
+# LOGIN TO ACR
+# ============================
+
+- task: AzureCLI@3
+  displayName: 'Login to ACR'
+  inputs:
+    azureSubscription: '$(azureServiceConnection)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az acr login --name $(acrName)
+
+
+# ============================
+# TAG IMAGE
+# ============================
+
+- script: |
+    docker tag \
+      $(imageName):$(imageTag) \
+      $(fullImageName)
+  displayName: 'Tag Docker Image'
+
+
+# ============================
+# PUSH TO ACR
+# ============================
+
+- script: |
+    docker push $(fullImageName)
+  displayName: 'Push Docker Image to ACR'
+
+
+# ============================
+# GET AKS CREDENTIALS
+# ============================
+
+- task: AzureCLI@3
+  displayName: 'Get AKS Credentials'
+  inputs:
+    azureSubscription: '$(azureServiceConnection)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az aks get-credentials \
+        --resource-group $(resourceGroup) \
+        --name $(aksName) \
+        --overwrite-existing
+
+      kubectl get nodes
+
+
+# ============================
+# CREATE ACR SECRET
+# ============================
+
+- task: AzureCLI@3
+  displayName: 'Create ACR Image Pull Secret'
+  inputs:
+    azureSubscription: '$(azureServiceConnection)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+
+      ACR_USERNAME=$(az acr credential show \
+        --name $(acrName) \
+        --query username \
+        --output tsv)
+
+      ACR_PASSWORD=$(az acr credential show \
+        --name $(acrName) \
+        --query passwords[0].value \
+        --output tsv)
+
+      kubectl create secret docker-registry acr-secret \
+        --docker-server=$(acrLoginServer) \
+        --docker-username=$ACR_USERNAME \
+        --docker-password=$ACR_PASSWORD \
+        --dry-run=client -o yaml | kubectl apply -f -
+
+
+# ============================
+# DEPLOY TO AKS
+# ============================
+
+- task: AzureCLI@3
+  displayName: 'Deploy Application to AKS'
+  inputs:
+    azureSubscription: '$(azureServiceConnection)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+
+      kubectl apply -f k8s/springboot-deployment.yaml
+
+      kubectl apply -f k8s/service.yaml
+
+
+# ============================
+# VERIFY DEPLOYMENT
+# ============================
+
+- task: AzureCLI@3
+  displayName: 'Verify AKS Deployment'
+  inputs:
+    azureSubscription: '$(azureServiceConnection)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+
+      kubectl get pods
+      kubectl get svc
+      kubectl rollout status deployment/springboot-app --timeout=180s
